@@ -22,7 +22,7 @@ export default function DeveloperPage() {
 
   useEffect(() => {
     if (isLoaded) {
-      const userRole = user?.unsafeMetadata?.role;
+      const userRole = user?.publicMetadata?.role;
       setHasAccess(userRole === "admin" || userRole === "developer");
       setLoading(false);
     }

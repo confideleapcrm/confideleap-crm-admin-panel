@@ -32,7 +32,7 @@ export default function DashboardLayout({ children }) {
   const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  const userRole = user?.unsafeMetadata?.role || "user";
+  const userRole = user?.publicMetadata?.role || "user";
 
   const navigation = [
     {

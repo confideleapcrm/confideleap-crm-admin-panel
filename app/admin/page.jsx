@@ -22,7 +22,7 @@ export default function AdminPage() {
 
   useEffect(() => {
     if (isLoaded) {
-      const userRole = user?.unsafeMetadata?.role;
+      const userRole = user?.publicMetadata?.role;
       setIsAdmin(userRole === "admin");
       setLoading(false);
     }

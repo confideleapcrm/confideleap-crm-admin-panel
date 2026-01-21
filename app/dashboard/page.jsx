@@ -19,7 +19,7 @@ export default function DashboardPage() {
       if (!user) {
         router.push("/signin");
       } else {
-        const userRole = user?.unsafeMetadata?.role || "user";
+        const userRole = user?.publicMetadata?.role || "user";
         console.log("userRole ", userRole);
         setRole(userRole);
       }
