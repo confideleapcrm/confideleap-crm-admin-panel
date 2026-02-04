@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Shield, Users, Settings, Activity, AlertCircle } from "lucide-react";
 import { Loader2 } from "lucide-react";
+import Link from "next/link";
 
 export default function AdminPage() {
   const { user, isLoaded } = useUser();
@@ -57,6 +58,12 @@ export default function AdminPage() {
           <p className="text-slate-600 mt-2">
             Manage users, roles, and system settings
           </p>
+        </div>
+
+        <div className="flex justify-end ">
+          <Link href="/admin/add_user">
+            <Button>Add User</Button>
+          </Link>
         </div>
 
         {/* Stats Grid */}
@@ -120,9 +127,11 @@ export default function AdminPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-2">
-              <Button className="w-full" variant="outline">
-                View All Users
-              </Button>
+              <Link href="/admin/all_users">
+                <Button className="w-full" variant="outline">
+                  View All Users
+                </Button>
+              </Link>
               <Button className="w-full" variant="outline">
                 Manage Roles
               </Button>

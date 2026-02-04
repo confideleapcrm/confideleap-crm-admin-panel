@@ -42,31 +42,48 @@ export default function SignUpPage() {
     setError("");
 
     try {
-      // Create user with role in public metadata
-      await signUp.create({
+      // 1. Create user in Clerk
+      const signup = await signUp.create({
         emailAddress: email,
         password,
         firstName,
         lastName,
         unsafeMetadata: {
-          role: role,
+          role,
         },
       });
 
-      // Update public metadata with role
-      await signUp.update({
-        unsafeMetadata: {
-          role: role,
-        },
-      });
+      // 2. Save user in your PostgreSQL DB (NO password)
+      // const res = await fetch("/api/auth/register", {
+      //   method: "POST",
+      //   headers: {
+      //     "Content-Type": "application/json",
+      //   },
+      //   body: JSON.stringify({
+      //     clerk_user_id: signup.id,
+      //     email,
+      //     password,
+      //     first_name: firstName,
+      //     last_name: lastName,
+      //     jobTitle: "developer",
+      //     department: "IT",
+      //     role,
+      //   }),
+      // });
 
+      // if (!res.ok) {
+      //   throw new Error("Failed to save user in database");
+      // }
+
+      // 3. Email verification
       await signUp.prepareEmailAddressVerification({
         strategy: "email_code",
       });
 
       setShowVerification(true);
     } catch (err) {
-      setError(err.errors?.[0]?.message || "Something went wrong");
+      console.error(err);
+      setError(err.errors?.[0]?.message || err.message || "Signup failed");
     } finally {
       setLoading(false);
     }

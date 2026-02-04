@@ -8,6 +8,7 @@ const isPublicRoute = createRouteMatcher([
   "/signup(.*)",
   "/sso-callback(.*)",
   "/api/webhooks(.*)",
+  "/api/auth/register", // ✅ ADD THIS
 ]);
 
 const isAdminRoute = createRouteMatcher(["/admin(.*)"]);
