@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Shield, Users, Settings, Activity, AlertCircle } from "lucide-react";
+import { Shield, Users, Settings, Activity, AlertCircle, Zap } from "lucide-react";
 import { Loader2 } from "lucide-react";
 import Link from "next/link";
 
@@ -61,7 +61,7 @@ export default function AdminPage() {
         </div>
 
         <div className="flex justify-end ">
-          <Link href="/admin/add_user">
+          <Link href="/admin/quick_access">
             <Button>Add User</Button>
           </Link>
         </div>
@@ -119,6 +119,25 @@ export default function AdminPage() {
 
         {/* Admin Actions */}
         <div className="grid gap-6 md:grid-cols-2">
+          <Card className="border-blue-200 bg-blue-50/30">
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <Zap className="h-5 w-5 text-amber-500 fill-amber-500" />
+                <CardTitle>Quick Operations</CardTitle>
+              </div>
+              <CardDescription>
+                Create users and assign companies in one step
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Link href="/admin/quick_access">
+                <Button className="w-full bg-blue-600 hover:bg-blue-700">
+                  Open Quick Workspace
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader>
               <CardTitle>User Management</CardTitle>
@@ -132,9 +151,11 @@ export default function AdminPage() {
                   View All Users
                 </Button>
               </Link>
-              <Button className="w-full" variant="outline">
-                Manage Roles
-              </Button>
+              <Link href="/admin/companies">
+                <Button className="w-full" variant="outline">
+                   View All Companies
+                </Button>
+              </Link>
               <Button className="w-full" variant="outline">
                 Export User Data
               </Button>

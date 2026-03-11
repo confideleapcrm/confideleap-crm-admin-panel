@@ -141,7 +141,7 @@ const page = () => {
                 <td className="px-6 py-4 whitespace-nowrap text-sm">
                   <Link
                     href={{
-                      pathname: "/admin/add_user",
+                      pathname: "/admin/quick_access",
                       query: { id: user.id },
                     }}
                     className="px-3 py-1 text-sm text-blue-500 hover:text-blue-600 flex items-center space-x-1"

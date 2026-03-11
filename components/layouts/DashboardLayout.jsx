@@ -21,6 +21,7 @@ import {
   ChevronDown,
   Menu,
   X,
+  Zap,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -40,6 +41,12 @@ export default function DashboardLayout({ children }) {
       href: "/dashboard",
       icon: LayoutDashboard,
       roles: ["admin", "developer", "user"],
+    },
+    {
+      name: "Quick Access",
+      href: "/admin/quick_access",
+      icon: Zap,
+      roles: ["admin"],
     },
     { name: "Admin Panel", href: "/admin", icon: Shield, roles: ["admin"] },
     {

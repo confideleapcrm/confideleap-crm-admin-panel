@@ -5,12 +5,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  Select,
+  Select as ShadcnSelect,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import ReactSelect from "react-select";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   Users,
@@ -36,6 +37,9 @@ export default function AddUserPage() {
   const [allowedRoutes, setAllowedRoutes] = useState([]);
   const [showPassword, setShowPassword] = useState(false);
 
+  const [companies, setCompanies] = useState([]);
+  const [assignedCompanies, setAssignedCompanies] = useState([]);
+
   const searchParams = useSearchParams();
   const userId = searchParams.get("id");
   const isEditMode = Boolean(userId);
@@ -56,6 +60,19 @@ export default function AddUserPage() {
   };
 
   useEffect(() => {
+    const fetchCompanies = async () => {
+      try {
+        const res = await fetch("/api/companies/get-companies");
+        const data = await res.json();
+        setCompanies(data.companies || []);
+      } catch (err) {
+        console.error("Error fetching companies:", err);
+      }
+    };
+    fetchCompanies();
+  }, []);
+
+  useEffect(() => {
     if (!userId) return;
 
     const getUserById = async () => {
@@ -70,6 +87,12 @@ export default function AddUserPage() {
       setJobTitle(data.job_title);
       setDepartment(data.department);
       setAllowedRoutes(data.allowed_routes || []);
+      setAssignedCompanies(
+        (data.assigned_companies || []).map((id) => ({
+          company_id: id,
+          status: "Active",
+        })),
+      );
     };
 
     getUserById();
@@ -78,9 +101,8 @@ export default function AddUserPage() {
   const generatePassword = (length = 12) => {
     const letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
     const numbers = "0123456789";
-    const symbols = "!@#$%^&*()_+-=[]{}|"; // Expanded symbols
+    const symbols = "!@#$%^&*()_+-=[]{}|";
 
-    // Use crypto.getRandomValues for better security if in browser
     const getRandomChar = (str) => str[Math.floor(Math.random() * str.length)];
 
     let passwordArr = [
@@ -94,7 +116,6 @@ export default function AddUserPage() {
       passwordArr.push(getRandomChar(allChars));
     }
 
-    // Fisher-Yates Shuffle (Better than .sort())
     for (let i = passwordArr.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [passwordArr[i], passwordArr[j]] = [passwordArr[j], passwordArr[i]];
@@ -113,6 +134,9 @@ export default function AddUserPage() {
       department,
       role,
       allowed_routes: allowedRoutes,
+      assigned_companies: assignedCompanies
+        .filter((c) => c.status === "Active")
+        .map((c) => c.company_id),
     };
 
     if (password.trim()) {
@@ -129,11 +153,45 @@ export default function AddUserPage() {
       body: JSON.stringify(payload),
     });
 
-    if (!res.ok) {
-      throw new Error("Failed to save user");
-    }
+    router.push("/admin");
+  };
 
-    router.push("/admin"); // or wherever your user list is
+  const companyOptions = companies.map((c) => ({
+    value: c.id,
+    label: c.name,
+  }));
+
+  const selectStyles = {
+    control: (base, state) => ({
+      ...base,
+      borderRadius: "0.5rem",
+      borderColor: state.isFocused ? "#3b82f6" : "#e2e8f0",
+      boxShadow: "none",
+      "&:hover": {
+        borderColor: "#3b82f6",
+      },
+      padding: "2px",
+    }),
+    multiValue: (base) => ({
+      ...base,
+      backgroundColor: "#eff6ff",
+      borderRadius: "9999px",
+      padding: "2px 8px",
+    }),
+    multiValueLabel: (base) => ({
+      ...base,
+      color: "#1d4ed8",
+      fontWeight: "500",
+    }),
+    multiValueRemove: (base) => ({
+      ...base,
+      color: "#3b82f6",
+      "&:hover": {
+        backgroundColor: "#dbeafe",
+        color: "#ef4444",
+        borderRadius: "9999px",
+      },
+    }),
   };
 
   return (
@@ -231,7 +289,7 @@ export default function AddUserPage() {
           {/* Role */}
           <div className="space-y-2">
             <Label>Role</Label>
-            <Select value={role} onValueChange={setRole}>
+            <ShadcnSelect value={role} onValueChange={setRole}>
               <SelectTrigger>
                 <SelectValue placeholder="Select role" />
               </SelectTrigger>
@@ -245,8 +303,157 @@ export default function AddUserPage() {
                   Investor Relations Analyst
                 </SelectItem>
               </SelectContent>
-            </Select>
+            </ShadcnSelect>
           </div>
+
+          {/* Assign Companies */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <Label className="text-sm font-semibold">Assign Companies</Label>
+
+              <span className="text-xs text-muted-foreground">
+                {assignedCompanies.filter((c) => c.status === "Active").length}{" "}
+                Active
+              </span>
+            </div>
+
+            <ReactSelect
+              isMulti
+              options={companyOptions}
+              styles={selectStyles}
+              value={companyOptions.filter((option) =>
+                assignedCompanies.find(
+                  (c) => c.company_id === option.value && c.status === "Active",
+                ),
+              )}
+              onChange={(selected) => {
+                const selectedIds = selected?.map((s) => s.value) || [];
+
+                setAssignedCompanies((prev) => {
+                  let updated = [...prev];
+
+                  selectedIds.forEach((id) => {
+                    const existing = updated.find((c) => c.company_id === id);
+
+                    if (existing) {
+                      existing.status = "Active";
+                    } else {
+                      updated.push({
+                        company_id: id,
+                        status: "Active",
+                        assigned_at: new Date(),
+                      });
+                    }
+                  });
+
+                  updated = updated.map((c) =>
+                    !selectedIds.includes(c.company_id)
+                      ? { ...c, status: "Inactive" }
+                      : c,
+                  );
+
+                  return updated;
+                });
+              }}
+              placeholder="Search companies..."
+              className="text-sm"
+            />
+
+            <p className="text-xs text-muted-foreground">
+              Assign companies this user will manage.
+            </p>
+          </div>
+
+          {/* Assigned Companies List */}
+          {assignedCompanies.length > 0 && (
+            <div className="mt-8">
+              <div className="flex items-center justify-between mb-3">
+                <Label className="text-sm font-semibold">
+                  Assigned Companies
+                </Label>
+
+                <span className="text-xs text-muted-foreground">
+                  {assignedCompanies.length} total
+                </span>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {assignedCompanies.map((company) => {
+                  const companyData = companies.find(
+                    (c) => String(c.id) === String(company.company_id),
+                  );
+
+                  const isActive = company.status === "Active";
+
+                  return (
+                    <div
+                      key={company.company_id}
+                      className="group flex items-center justify-between p-4 rounded-xl border bg-white hover:shadow-md transition"
+                    >
+                      {/* Left Section */}
+                      <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 rounded-lg bg-slate-100 flex items-center justify-center text-sm font-semibold">
+                          {companyData?.name?.[0] || "C"}
+                        </div>
+
+                        <div>
+                          <p className="text-sm font-semibold">
+                            {companyData?.name || "Unknown Company"}
+                          </p>
+
+                          <div className="flex items-center gap-2 mt-1">
+                            <span
+                              className={clsx(
+                                "text-xs px-2 py-0.5 rounded-full font-medium",
+                                isActive
+                                  ? "bg-green-100 text-green-700"
+                                  : "bg-gray-100 text-gray-600",
+                              )}
+                            >
+                              {company.status}
+                            </span>
+
+                            {company.assigned_at && (
+                              <span className="text-xs text-muted-foreground">
+                                {new Date(
+                                  company.assigned_at,
+                                ).toLocaleDateString()}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Actions */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAssignedCompanies((prev) =>
+                            prev.map((c) =>
+                              c.company_id === company.company_id
+                                ? {
+                                    ...c,
+                                    status: isActive ? "Inactive" : "Active",
+                                  }
+                                : c,
+                            ),
+                          );
+                        }}
+                        className={clsx(
+                          "text-xs px-3 py-1 rounded-md font-medium transition",
+                          isActive
+                            ? "bg-red-50 text-red-600 hover:bg-red-100"
+                            : "bg-green-50 text-green-600 hover:bg-green-100",
+                        )}
+                      >
+                        {isActive ? "Deactivate" : "Activate"}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Allowed Routes */}
           <div className="space-y-2">
