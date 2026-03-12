@@ -76,7 +76,6 @@ This transforms the system from a simple assignment manager into a complete CRM 
 
 
 
-
 5. Smart Search and Advanced Filters
 
 As the system grows and starts managing hundreds or thousands of companies, users need powerful filtering tools to quickly find data.

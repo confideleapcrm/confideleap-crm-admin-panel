@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import pool from "../../../../../lib/db";
 import bcrypt from "bcryptjs";
+import { ulid } from "ulid";
 
 /**
  * ==============================
@@ -180,60 +181,117 @@ export async function PUT(req, { params }) {
        FROM companies c
        LEFT JOIN users u ON c.assigned_user_id = u.id
        WHERE c.assigned_user_id = $1`,
-      [userId]
+      [userId],
     );
-    const oldAssignedIds = currentAssignmentsRes.rows.map(r => r.id);
+    const oldAssignedIds = currentAssignmentsRes.rows.map((r) => r.id);
     const companyInfoMap = {};
-    currentAssignmentsRes.rows.forEach(r => {
-      companyInfoMap[r.id] = { name: r.name, ownerName: `${r.first_name} ${r.last_name}` };
+    currentAssignmentsRes.rows.forEach((r) => {
+      companyInfoMap[r.id] = {
+        name: r.name,
+        ownerName: `${r.first_name} ${r.last_name}`,
+      };
     });
 
     // 2. Identify removals (Deactivations)
-    const toRemove = oldAssignedIds.filter(id => !activeCompanies.includes(id));
+    // 2. Identify removals (Deactivations)
+    const toRemove = oldAssignedIds.filter(
+      (id) => !activeCompanies.includes(id),
+    );
+
     if (toRemove.length > 0) {
       await client.query(
-        `UPDATE companies
-         SET status = 'Inactive', deactivated_at = NOW(), deactivated_by = $1
-         WHERE id = ANY($2::uuid[])`,
-        [userId, toRemove]
+        `
+    UPDATE companies
+    SET 
+      status = 'Inactive',
+      deactivated_at = NOW(),
+      deactivated_by = $1
+    WHERE id = ANY($2::varchar[])
+    `,
+        [userId, toRemove],
       );
 
       // Log removals
       for (const compId of toRemove) {
+        const historyId = ulid();
+
         await client.query(
           `INSERT INTO company_assignment_history (
-            company_id, old_user_id, new_user_id, company_name, old_owner_name, new_owner_name, transferred_by_name, transferred_at
-          ) VALUES ($1, $2, NULL, $3, $4, 'None', 'System/Update', NOW())`,
-          [compId, userId, companyInfoMap[compId]?.name || "Unknown", newOwnerName]
+      id,
+      company_id,
+      old_user_id,
+      new_user_id,
+      company_name,
+      old_owner_name,
+      new_owner_name,
+      transferred_by_name,
+      transferred_at
+    )
+    VALUES ($1,$2,$3,NULL,$4,$5,'None','System/Update',NOW())`,
+          [
+            historyId,
+            compId,
+            userId,
+            companyInfoMap[compId]?.name || "Unknown",
+            newOwnerName,
+          ],
         );
       }
     }
 
     // 3. Identify new assignments
-    const toAdd = activeCompanies.filter(id => !oldAssignedIds.includes(id));
+    const toAdd = activeCompanies.filter((id) => !oldAssignedIds.includes(id));
     if (toAdd.length > 0) {
-      // Need names for new ones
+      // Fetch company names
       const newCompaniesRes = await client.query(
-        `SELECT id, name FROM companies WHERE id = ANY($1::uuid[])`,
-        [toAdd]
+        `SELECT id, name 
+     FROM companies 
+     WHERE id = ANY($1::varchar[])`,
+        [toAdd],
       );
-      const newCompanyNames = {};
-      newCompaniesRes.rows.forEach(r => newCompanyNames[r.id] = r.name);
 
+      const newCompanyNames = {};
+
+      newCompaniesRes.rows.forEach((r) => {
+        newCompanyNames[r.id] = r.name;
+      });
+
+      // Assign companies
       await client.query(
         `UPDATE companies
-         SET assigned_user_id = $1, status = 'Active', deactivated_at = NULL, deactivated_by = NULL
-         WHERE id = ANY($2::uuid[])`,
-        [userId, toAdd]
+     SET assigned_user_id = $1,
+         status = 'Active',
+         deactivated_at = NULL,
+         deactivated_by = NULL
+     WHERE id = ANY($2::varchar[])`,
+        [userId, toAdd],
       );
 
-      // Log additions
+      // Log assignment history
+      // Log assignment history
       for (const compId of toAdd) {
+        const historyId = ulid();
+
         await client.query(
           `INSERT INTO company_assignment_history (
-            company_id, old_user_id, new_user_id, company_name, old_owner_name, new_owner_name, transferred_by_name, transferred_at
-          ) VALUES ($1, NULL, $2, $3, 'None', $4, 'System/Update', NOW())`,
-          [compId, userId, newCompanyNames[compId] || "Unknown", newOwnerName]
+      id,
+      company_id,
+      old_user_id,
+      new_user_id,
+      company_name,
+      old_owner_name,
+      new_owner_name,
+      transferred_by_name,
+      transferred_at
+    )
+    VALUES ($1,$2,NULL,$3,$4,'None',$5,'System/Update',NOW())`,
+          [
+            historyId,
+            compId,
+            userId,
+            newCompanyNames[compId] || "Unknown",
+            newOwnerName,
+          ],
         );
       }
     }
