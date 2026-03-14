@@ -36,6 +36,9 @@ import {
   Globe,
   Tag,
   LayoutGrid,
+  Save,
+  Trash2,
+  ShieldAlert,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Toaster } from "sonner";
@@ -361,6 +364,8 @@ export default function QuickAccessPage() {
     }
   };
 
+  const handleSaveCompanies = handleAddUser;
+
   const handleAddCompany = () => {
     if (!companyData.name) {
       toast.error("Company name is required");
@@ -454,7 +459,7 @@ export default function QuickAccessPage() {
           {/* Main User Form */}
           <div className="lg:col-span-2 space-y-6">
             <Card className="border-slate-200 shadow-sm">
-              <CardHeader className="border-b border-slate-50 pb-4">
+              <CardHeader className="border-b border-slate-50">
                 <div className="flex items-center gap-2">
                   <UserPlus className="h-5 w-5 text-blue-600" />
                   <CardTitle className="text-lg">Core User Profile</CardTitle>
@@ -463,7 +468,7 @@ export default function QuickAccessPage() {
                   Enter basic details and system role for the user.
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-6 pt-6">
+              <CardContent className="space-y-6">
                 <div className="grid grid-cols-2 gap-6">
                   <div className="space-y-1.5">
                     <Label className="text-slate-600">First Name</Label>
@@ -682,14 +687,18 @@ export default function QuickAccessPage() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-6 w-6 text-slate-400 hover:text-red-500 hover:bg-slate-100"
-                          onClick={() =>
-                            setSelectedCompanies((prev) =>
-                              prev.filter((x) => x.value !== c.value),
-                            )
-                          }
+                          className="h-6 w-6 text-slate-400 hover:text-red-500 hover:bg-red-50"
+                          title="Deactivate Assignment"
+                          onClick={() => {
+                            if (confirm(`Are you sure you want to deactivate ${c.label}?`)) {
+                              setSelectedCompanies((prev) =>
+                                prev.filter((x) => x.value !== c.value),
+                              );
+                              toast.info(`${c.label} ready for deactivation (Click Save Changes to apply)`);
+                            }
+                          }}
                         >
-                          <Plus className="h-4 w-4 rotate-45" />
+                          <Trash2 className="h-3.5 w-3.5" />
                         </Button>
                       </div>
                     ))}
@@ -707,21 +716,15 @@ export default function QuickAccessPage() {
                 <div className="pt-4">
                   <Button
                     className="w-full h-12 bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-100 font-bold"
-                    onClick={handleAddUser}
+                    onClick={handleSaveCompanies}
                     disabled={submitting}
                   >
                     {submitting ? (
                       <RefreshCw className="h-5 w-5 mr-3 animate-spin" />
-                    ) : isEditMode ? (
-                      <Edit className="h-5 w-5 mr-3" />
                     ) : (
-                      <UserPlus className="h-5 w-5 mr-3" />
+                      <Save className="h-5 w-5 mr-3" />
                     )}
-                    {submitting
-                      ? "Processing..."
-                      : isEditMode
-                        ? "Save Profile Changes"
-                        : "Finalize Onboarding"}
+                    {submitting ? "Processing..." : "Save Changes"}
                   </Button>
                 </div>
               </CardContent>

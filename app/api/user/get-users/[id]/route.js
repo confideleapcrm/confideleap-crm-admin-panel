@@ -67,7 +67,7 @@ export async function GET(req, { params }) {
 
 /**
  * ==============================
- * UPDATE USER
+ * UPDATE USER & MANAGE ASSIGNMENTS
  * ==============================
  */
 export async function PUT(req, { params }) {
@@ -96,32 +96,21 @@ export async function PUT(req, { params }) {
   try {
     await client.query("BEGIN");
 
+    /**
+     * 1. UPDATE USER DATA
+     */
     let query;
     let queryParams;
 
-    /**
-     * ==============================
-     * UPDATE USER DATA
-     * ==============================
-     */
     if (password && password.trim() !== "") {
       const hashedPassword = await bcrypt.hash(password, 12);
-
       query = `
         UPDATE users
-        SET
-          email = $1,
-          first_name = $2,
-          last_name = $3,
-          role = $4,
-          job_title = $5,
-          department = $6,
-          allowed_routes = $7,
-          password_hash = $8
+        SET email = $1, first_name = $2, last_name = $3, role = $4, 
+            job_title = $5, department = $6, allowed_routes = $7, password_hash = $8
         WHERE id = $9
         RETURNING *
       `;
-
       queryParams = [
         email,
         first_name,
@@ -136,18 +125,11 @@ export async function PUT(req, { params }) {
     } else {
       query = `
         UPDATE users
-        SET
-          email = $1,
-          first_name = $2,
-          last_name = $3,
-          role = $4,
-          job_title = $5,
-          department = $6,
-          allowed_routes = $7
+        SET email = $1, first_name = $2, last_name = $3, role = $4, 
+            job_title = $5, department = $6, allowed_routes = $7
         WHERE id = $8
         RETURNING *
       `;
-
       queryParams = [
         email,
         first_name,
@@ -168,14 +150,12 @@ export async function PUT(req, { params }) {
     }
 
     /**
-     * ==============================
-     * COMPANY ASSIGNMENT LOGIC (With Logging)
-     * ==============================
+     * 2. ANALYZE ASSIGNMENT CHANGES
      */
     const activeCompanies = assigned_companies || [];
     const newOwnerName = `${first_name} ${last_name}`;
 
-    // 1. Fetch current assignments to see what's changing
+    // Get current state before changes
     const currentAssignmentsRes = await client.query(
       `SELECT c.id, c.name, u.first_name, u.last_name
        FROM companies c
@@ -183,132 +163,123 @@ export async function PUT(req, { params }) {
        WHERE c.assigned_user_id = $1`,
       [userId],
     );
+
     const oldAssignedIds = currentAssignmentsRes.rows.map((r) => r.id);
     const companyInfoMap = {};
     currentAssignmentsRes.rows.forEach((r) => {
       companyInfoMap[r.id] = {
         name: r.name,
-        ownerName: `${r.first_name} ${r.last_name}`,
+        ownerName: r.first_name ? `${r.first_name} ${r.last_name}` : "Unknown",
       };
     });
 
-    // 2. Identify removals (Deactivations)
-    // 2. Identify removals (Deactivations)
+    /**
+     * 3. HANDLE REMOVALS (DEACTIVATIONS)
+     */
     const toRemove = oldAssignedIds.filter(
       (id) => !activeCompanies.includes(id),
     );
 
     if (toRemove.length > 0) {
+      // Mark companies as Inactive in the companies table
       await client.query(
-        `
-    UPDATE companies
-    SET 
-      status = 'Inactive',
-      deactivated_at = NOW(),
-      deactivated_by = $1
-    WHERE id = ANY($2::varchar[])
-    `,
+        `UPDATE companies
+         SET status = 'Inactive',
+             assigned_user_id = NULL,
+             deactivated_at = NOW(),
+             deactivated_by = $1
+         WHERE id = ANY($2::varchar[])`,
         [userId, toRemove],
       );
 
-      // Log removals
+      // Log deactivation in history table
       for (const compId of toRemove) {
         const historyId = ulid();
+        const company = companyInfoMap[compId];
 
         await client.query(
           `INSERT INTO company_assignment_history (
-      id,
-      company_id,
-      old_user_id,
-      new_user_id,
-      company_name,
-      old_owner_name,
-      new_owner_name,
-      transferred_by_name,
-      transferred_at
-    )
-    VALUES ($1,$2,$3,NULL,$4,$5,'None','System/Update',NOW())`,
+            id, company_id, old_user_id, new_user_id, company_name, 
+            old_owner_name, new_owner_name, transferred_by_name, 
+            transferred_at, deactivated_at, deactivated_by
+          )
+          VALUES ($1, $2, $3, NULL, $4, $5, 'None', 'System/Update', NOW(), NOW(), $6)`,
           [
             historyId,
             compId,
             userId,
-            companyInfoMap[compId]?.name || "Unknown",
-            newOwnerName,
+            company?.name || "Unknown",
+            company?.ownerName || "Unknown",
+            userId, // ID of the admin/user performing the action
           ],
         );
       }
     }
 
-    // 3. Identify new assignments
+    /**
+     * 4. HANDLE NEW ASSIGNMENTS (ACTIVATIONS)
+     */
+    /**
+     * 4. SYNC ACTIVE ASSIGNMENTS
+     */
+    // Identify truly new assignments for logging purposes
     const toAdd = activeCompanies.filter((id) => !oldAssignedIds.includes(id));
-    if (toAdd.length > 0) {
-      // Fetch company names
-      const newCompaniesRes = await client.query(
-        `SELECT id, name 
-     FROM companies 
-     WHERE id = ANY($1::varchar[])`,
-        [toAdd],
-      );
 
-      const newCompanyNames = {};
-
-      newCompaniesRes.rows.forEach((r) => {
-        newCompanyNames[r.id] = r.name;
-      });
-
-      // Assign companies
+    if (activeCompanies.length > 0) {
+      // FORCE all assigned companies to 'Active' status
+      // This ensures that even if a company was 'Inactive', it becomes 'Active' now
       await client.query(
         `UPDATE companies
-     SET assigned_user_id = $1,
-         status = 'Active',
-         deactivated_at = NULL,
-         deactivated_by = NULL
-     WHERE id = ANY($2::varchar[])`,
-        [userId, toAdd],
+         SET assigned_user_id = $1,
+             status = 'Active',
+             deactivated_at = NULL,
+             deactivated_by = NULL
+         WHERE id = ANY($2::varchar[])`,
+        [userId, activeCompanies],
       );
 
-      // Log assignment history
-      // Log assignment history
-      for (const compId of toAdd) {
-        const historyId = ulid();
-
-        await client.query(
-          `INSERT INTO company_assignment_history (
-      id,
-      company_id,
-      old_user_id,
-      new_user_id,
-      company_name,
-      old_owner_name,
-      new_owner_name,
-      transferred_by_name,
-      transferred_at
-    )
-    VALUES ($1,$2,NULL,$3,$4,'None',$5,'System/Update',NOW())`,
-          [
-            historyId,
-            compId,
-            userId,
-            newCompanyNames[compId] || "Unknown",
-            newOwnerName,
-          ],
+      // Log only the NEWLY assigned ones in history
+      if (toAdd.length > 0) {
+        const newCompaniesRes = await client.query(
+          `SELECT id, name FROM companies WHERE id = ANY($1::varchar[])`,
+          [toAdd],
         );
+
+        const newCompanyNames = {};
+        newCompaniesRes.rows.forEach((r) => {
+          newCompanyNames[r.id] = r.name;
+        });
+
+        for (const compId of toAdd) {
+          const historyId = ulid();
+          await client.query(
+            `INSERT INTO company_assignment_history (
+              id, company_id, old_user_id, new_user_id, company_name, 
+              old_owner_name, new_owner_name, transferred_by_name, 
+              transferred_at
+            )
+            VALUES ($1, $2, NULL, $3, $4, 'None', $5, 'System/Update', NOW())`,
+            [
+              historyId,
+              compId,
+              userId,
+              newCompanyNames[compId] || "Unknown",
+              newOwnerName,
+            ],
+          );
+        }
       }
     }
 
     await client.query("COMMIT");
 
-    /**
-     * Return updated user
-     */
     const updatedUser = result.rows[0];
     updatedUser.assigned_companies = activeCompanies;
 
     return NextResponse.json(updatedUser);
   } catch (error) {
-    await client.query("ROLLBACK");
+    if (client) await client.query("ROLLBACK");
     console.error("DB error:", error);
-
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 },

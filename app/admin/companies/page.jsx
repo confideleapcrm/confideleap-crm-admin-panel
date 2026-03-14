@@ -2,7 +2,7 @@
 
 import DashboardLayout from "@/components/layouts/DashboardLayout";
 import React, { useEffect, useMemo, useState } from "react";
-import { Edit, RefreshCw } from "lucide-react";
+import { Edit, RefreshCw, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import CompanyTransferModal from "@/components/dashboards/CompanyTransferModal";
@@ -42,6 +42,29 @@ const page = () => {
       console.log(error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDelete = async (id, name) => {
+    if (!confirm(`Are you sure you want to delete ${name}? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/companies/${id}`, {
+        method: "DELETE",
+      });
+
+      if (res.ok) {
+        toast.success("Company deleted successfully");
+        getCompanies();
+      } else {
+        const data = await res.json();
+        toast.error(data.error || "Failed to delete company");
+      }
+    } catch (error) {
+      console.error("Delete error:", error);
+      toast.error("An error occurred while deleting the company");
     }
   };
 
@@ -191,9 +214,20 @@ const page = () => {
                       <span>Transfer</span>
                     </button>
                   )}
+
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDelete(company.id, company.name);
+                    }}
+                    className="px-3 py-1 text-sm bg-red-50 text-red-600 rounded-md hover:bg-red-100 flex items-center space-x-1 transition-all"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    <span>Delete</span>
+                  </button>
                 </td>
 
-                <td className="px-6 py-4">
+                {/* <td className="px-6 py-4">
                   <span
                     className={`px-2 py-1 text-xs rounded-full ${
                       company.assignment_status === "Active"
@@ -203,7 +237,7 @@ const page = () => {
                   >
                     {company.assignment_status || "N/A"}
                   </span>
-                </td>
+                </td> */}
               </tr>
             ))}
           </tbody>
